@@ -115,11 +115,17 @@
   // alphaは北を基準にした角度（ブラウザ・機種によって挙動が違う）
   // ============================================================
   function onOrientation(e) {
+    // デバッグ用：イベントの中身をログに出す
+    console.log("orientation event:", e.type, "alpha:", e.alpha, "absolute:", e.absolute, "webkit:", e.webkitCompassHeading);
+
     // webkitCompassHeadingはiPhone用（北=0°の絶対値）
     if (e.webkitCompassHeading !== undefined) {
       heading = e.webkitCompassHeading;
     } else if (e.absolute && e.alpha !== null) {
       // Androidの絶対方位
+      heading = (360 - e.alpha) % 360;
+    } else if (e.alpha !== null) {
+      // absoluteでなくてもalphaが取れる場合は使う（暫定）
       heading = (360 - e.alpha) % 360;
     }
   }
