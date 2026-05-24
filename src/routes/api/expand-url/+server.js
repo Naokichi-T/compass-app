@@ -1,6 +1,6 @@
 // ============================================================
 // 短縮URLを展開して座標を返すAPIルート
-// 短縮URL → 展開 → 座標抽出 → なければPlace IDからGeocoding API
+// 短縮URL → 展開 → 座標抽出 → なければ場所名でPlaces API検索
 // ============================================================
 
 import { GOOGLE_MAPS_API_KEY } from "$env/static/private";
@@ -17,24 +17,24 @@ function extractCoordsFromUrl(url) {
 }
 
 // ============================================================
-// URLからplace IDを取り出す
-// 例: data=!4m2!3m1!1s0x6018...:0xd214... の形式
+// GoogleマップのURLから場所名を取り出す
+// URLの /place/場所名/ の部分をデコードして返す
 // ============================================================
-function extractPlaceId(url) {
-  // !1s の後に続く 0x形式のplace IDを探す
-  const match = url.match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/);
-  if (match) return match[1];
+function extractPlaceName(url) {
+  const match = url.match(/\/place\/([^/]+)\//);
+  if (match) {
+    return decodeURIComponent(match[1]).replace(/\+/g, " ");
+  }
   return null;
 }
 
 // ============================================================
-// place IDからGeocoding APIで座標を取得する
+// 場所名でPlaces APIを検索して座標を取得する
 // ============================================================
-async function coordsFromPlaceId(placeId) {
-  const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?place_id=${encodeURIComponent(placeId)}&key=${GOOGLE_MAPS_API_KEY}`);
+async function coordsFromPlaceName(placeName) {
+  const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(placeName)}&key=${GOOGLE_MAPS_API_KEY}`);
   const data = await res.json();
-  // デバッグ用：APIレスポンスをログに出す
-  console.log("Geocoding APIレスポンス:", JSON.stringify(data));
+  console.log("Geocoding APIレスポンス status:", data.status);
   if (data.status === "OK" && data.results.length > 0) {
     const loc = data.results[0].geometry.location;
     const name = data.results[0].formatted_address;
@@ -62,18 +62,20 @@ export async function GET({ url }) {
     // ① まず展開後URLから座標を取り出す
     const coords = extractCoordsFromUrl(expandedUrl);
     if (coords) {
-      return new Response(JSON.stringify({ ...coords, name: "目的地" }), {
+      // 場所名も取り出して一緒に返す
+      const placeName = extractPlaceName(expandedUrl);
+      return new Response(JSON.stringify({ ...coords, name: placeName ?? "目的地" }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     }
 
-    // ② 座標がなければplace IDからGeocoding APIで取得する
-    const placeId = extractPlaceId(expandedUrl);
-    console.log("place ID:", placeId);
+    // ② 座標がなければ場所名でGeocoding APIを使う
+    const placeName = extractPlaceName(expandedUrl);
+    console.log("場所名:", placeName);
 
-    if (placeId) {
-      const result = await coordsFromPlaceId(placeId);
+    if (placeName) {
+      const result = await coordsFromPlaceName(placeName);
       if (result) {
         return new Response(JSON.stringify(result), {
           status: 200,
