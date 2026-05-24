@@ -4,10 +4,85 @@
   // 現在地と目的地の座標から、矢印で方向を示す
   // ============================================================
 
-  // --- テスト用の目的地（川越駅） ---
-  const DEST_LAT = 35.9071163;
-  const DEST_LNG = 139.4824443;
-  const DEST_NAME = "川越駅";
+  // --- 目的地の状態変数 ---
+  let destLat = $state(null);
+  let destLng = $state(null);
+  let destName = $state("");
+
+  // URL入力欄の状態
+  let urlInput = $state("");
+  let urlError = $state("");
+  let urlLoading = $state(false);
+
+  // ============================================================
+  // GoogleマップのURLから座標を取り出す（正規表現）
+  // 通常URL例: https://www.google.com/maps/place/川越駅/@35.907,139.482,17z
+  // ============================================================
+  function extractCoordsFromUrl(url) {
+    // @緯度,経度 のパターンを探す
+    const match = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    if (match) {
+      return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+    }
+    return null;
+  }
+
+  // ============================================================
+  // 短縮URLかどうかを判定する
+  // maps.app.goo.gl または goo.gl/maps を短縮URLとみなす
+  // ============================================================
+  function isShortUrl(url) {
+    return url.includes("maps.app.goo.gl") || url.includes("goo.gl/maps");
+  }
+
+  // ============================================================
+  // URLを貼り付けたときの処理
+  // 短縮URLはサーバー側で展開してから座標を取り出す
+  // ============================================================
+  async function handleUrlInput() {
+    urlError = "";
+    const input = urlInput.trim();
+
+    if (!input) return;
+
+    urlLoading = true;
+
+    try {
+      let targetUrl = input;
+
+      // 短縮URLの場合はサーバー側で展開する
+      if (isShortUrl(input)) {
+        const res = await fetch(`/api/expand-url?url=${encodeURIComponent(input)}`);
+        const data = await res.json();
+
+        if (data.error) {
+          urlError = data.error;
+          urlLoading = false;
+          return;
+        }
+        targetUrl = data.expandedUrl;
+      }
+
+      // 展開されたURLから座標を取り出す
+      const coords = extractCoordsFromUrl(targetUrl);
+
+      if (!coords) {
+        urlError = "URLから座標を取り出せませんでした。GoogleマップのURLを貼り付けてください。";
+        urlLoading = false;
+        return;
+      }
+
+      // 目的地をセットする
+      destLat = coords.lat;
+      destLng = coords.lng;
+      destName = "目的地";
+      urlInput = "";
+    } catch (e) {
+      urlError = "エラーが発生しました: " + e.message;
+    }
+
+    urlLoading = false;
+  }
 
   // --- 状態変数 ---
   let currentLat = $state(null); // 現在地の緯度
@@ -42,10 +117,10 @@
 
   // --- 計算結果（derived） ---
   // 現在地から目的地までの距離（メートル）
-  let distance = $derived(currentLat !== null ? calcDistance(currentLat, currentLng, DEST_LAT, DEST_LNG) : null);
+  let distance = $derived(currentLat !== null && destLat !== null ? calcDistance(currentLat, currentLng, destLat, destLng) : null);
 
   // 目的地の方角（北基準）
-  let bearing = $derived(currentLat !== null ? calcBearing(currentLat, currentLng, DEST_LAT, DEST_LNG) : null);
+  let bearing = $derived(currentLat !== null && destLat !== null ? calcBearing(currentLat, currentLng, destLat, destLng) : null);
 
   // 矢印の回転角度（スマホの向きを引いた相対角度）
   let arrowAngle = $derived(bearing !== null && heading !== null ? (bearing - heading + 360) % 360 : null);
@@ -147,12 +222,27 @@
   {:else}
     <!-- コンパス表示 -->
     <div class="card">
-      <p class="dest-name">目的地：{DEST_NAME}</p>
-      <p class="distance">{formatDistance(distance)}</p>
+      <!-- URL入力欄 -->
+      <div class="url-input-wrap">
+        <input class="url-input" type="text" placeholder="GoogleマップのURLを貼り付け" bind:value={urlInput} />
+        <button class="url-btn" onclick={handleUrlInput} disabled={urlLoading}>
+          {urlLoading ? "取得中..." : "セット"}
+        </button>
+      </div>
+      {#if urlError}
+        <p class="url-error">{urlError}</p>
+      {/if}
 
-      <!-- 矢印 -->
+      {#if destLat !== null}
+        <p class="dest-name">目的地：{destName}</p>
+        <p class="distance">{formatDistance(distance)}</p>
+      {:else}
+        <p class="dest-none">↑ URLを貼り付けて目的地をセットしてください</p>
+      {/if}
+
+      <!-- 矢印（目的地がセットされているときだけ表示） -->
       <div class="arrow-wrap">
-        {#if arrowAngle !== null}
+        {#if arrowAngle !== null && destLat !== null}
           <div class="arrow" style="transform: rotate({arrowAngle}deg)">
             <!-- SVGで矢印を描画（上向きが目的地方向） -->
             <svg viewBox="0 0 100 160" width="100" height="160" xmlns="http://www.w3.org/2000/svg">
@@ -269,5 +359,48 @@
     font-size: 11px;
     color: #bbb;
     line-height: 1.6;
+  }
+
+  /* URL入力欄 */
+  .url-input-wrap {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .url-input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    box-sizing: border-box;
+  }
+
+  .url-btn {
+    background: #2a7ae2;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .url-btn:disabled {
+    background: #aaa;
+  }
+
+  .url-error {
+    color: #dc3545;
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .dest-none {
+    font-size: 13px;
+    color: #999;
+    margin: 16px 0;
   }
 </style>
