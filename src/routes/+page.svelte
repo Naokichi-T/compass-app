@@ -50,33 +50,35 @@
     try {
       let targetUrl = input;
 
-      // 短縮URLの場合はサーバー側で展開する
       if (isShortUrl(input)) {
+        // 短縮URLの場合はサーバー側で展開して座標まで取得する
         const res = await fetch(`/api/expand-url?url=${encodeURIComponent(input)}`);
         const data = await res.json();
-
         if (data.error) {
           urlError = data.error;
           urlLoading = false;
           return;
         }
-        targetUrl = data.expandedUrl;
+        // サーバーから座標が直接返ってくる
+        destLat = data.lat;
+        destLng = data.lng;
+        destName = data.name ?? "目的地";
+        urlInput = "";
+      } else {
+        // 通常URLの場合はフロントエンドで座標を取り出す
+        const coords = extractCoordsFromUrl(input);
+        if (!coords) {
+          urlError = "URLから座標を取り出せませんでした。GoogleマップのURLを貼り付けてください。";
+          urlLoading = false;
+          return;
+        }
+        // 場所名も取り出す
+        const placeName = input.match(/\/place\/([^/]+)\//)?.[1];
+        destLat = coords.lat;
+        destLng = coords.lng;
+        destName = placeName ? decodeURIComponent(placeName).replace(/\+/g, " ") : "目的地";
+        urlInput = "";
       }
-
-      // 展開されたURLから座標を取り出す
-      const coords = extractCoordsFromUrl(targetUrl);
-
-      if (!coords) {
-        urlError = "URLから座標を取り出せませんでした。GoogleマップのURLを貼り付けてください。";
-        urlLoading = false;
-        return;
-      }
-
-      // 目的地をセットする
-      destLat = coords.lat;
-      destLng = coords.lng;
-      destName = coords.name ?? "目的地";
-      urlInput = "";
     } catch (e) {
       urlError = "エラーが発生しました: " + e.message;
     }
