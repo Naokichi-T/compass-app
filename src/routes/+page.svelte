@@ -75,7 +75,7 @@
       // 目的地をセットする
       destLat = coords.lat;
       destLng = coords.lng;
-      destName = "目的地";
+      destName = coords.name ?? "目的地";
       urlInput = "";
     } catch (e) {
       urlError = "エラーが発生しました: " + e.message;
