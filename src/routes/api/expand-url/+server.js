@@ -34,7 +34,6 @@ function extractPlaceName(url) {
 async function coordsFromPlaceName(placeName) {
   const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(placeName)}&language=ja&key=${GOOGLE_MAPS_API_KEY}`);
   const data = await res.json();
-  console.log("Geocoding APIレスポンス status:", data.status);
   if (data.status === "OK" && data.results.length > 0) {
     const loc = data.results[0].geometry.location;
     const name = data.results[0].formatted_address;
@@ -57,7 +56,6 @@ export async function GET({ url }) {
     // 短縮URLを展開する
     const response = await fetch(targetUrl, { redirect: "follow" });
     const expandedUrl = response.url;
-    console.log("展開後URL:", expandedUrl);
 
     // ① まず展開後URLから座標を取り出す
     const coords = extractCoordsFromUrl(expandedUrl);
@@ -72,7 +70,6 @@ export async function GET({ url }) {
 
     // ② 座標がなければ場所名でGeocoding APIを使う
     const placeName = extractPlaceName(expandedUrl);
-    console.log("場所名:", placeName);
 
     if (placeName) {
       const result = await coordsFromPlaceName(placeName);
