@@ -22,7 +22,8 @@ export async function GET({ url }) {
       redirect: "follow", // リダイレクトを自動で追う
     });
 
-    // 最終的なURLを返す
+    // 最終的なURLをログに出して返す
+    console.log("展開後URL:", response.url);
     return new Response(JSON.stringify({ expandedUrl: response.url }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
