@@ -156,7 +156,15 @@
       <!-- 矢印 -->
       <div class="arrow-wrap">
         {#if arrowAngle !== null}
-          <div class="arrow" style="transform: rotate({arrowAngle}deg)">▲</div>
+          <div class="arrow" style="transform: rotate({arrowAngle}deg)">
+            <!-- SVGで矢印を描画（上向きが目的地方向） -->
+            <svg viewBox="0 0 100 160" width="100" height="160" xmlns="http://www.w3.org/2000/svg">
+              <!-- 矢印の先端（上） -->
+              <polygon points="50,0 90,70 50,50 10,70" fill="#2a7ae2" />
+              <!-- 矢印の軸（下） -->
+              <polygon points="35,55 65,55 65,160 35,160" fill="#2a7ae2" />
+            </svg>
+          </div>
         {:else}
           <div class="arrow-loading">取得中...</div>
         {/if}
@@ -228,9 +236,6 @@
 
   /* 矢印：文字で表現してCSSで回転させる */
   .arrow {
-    font-size: 100px;
-    color: #2a7ae2;
-    line-height: 1;
     transition: transform 0.3s ease; /* なめらかに回転 */
   }
 
