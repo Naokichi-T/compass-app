@@ -33,6 +33,8 @@ function extractPlaceId(url) {
 async function coordsFromPlaceId(placeId) {
   const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?place_id=${encodeURIComponent(placeId)}&key=${GOOGLE_MAPS_API_KEY}`);
   const data = await res.json();
+  // デバッグ用：APIレスポンスをログに出す
+  console.log("Geocoding APIレスポンス:", JSON.stringify(data));
   if (data.status === "OK" && data.results.length > 0) {
     const loc = data.results[0].geometry.location;
     const name = data.results[0].formatted_address;
