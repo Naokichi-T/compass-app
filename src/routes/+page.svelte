@@ -209,7 +209,7 @@
   {#if permission === "idle"}
     <!-- センサー開始前 -->
     <div class="card">
-      <p class="dest-name">目的地：{DEST_NAME}</p>
+      <p class="dest-name">目的地：{destName}</p>
       <button class="start-btn" onclick={startSensors}> 📍 コンパスを起動する </button>
       <p class="note">※ GPSと方位センサーの許可が必要です</p>
     </div>
