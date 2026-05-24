@@ -32,7 +32,7 @@ function extractPlaceName(url) {
 // 場所名でPlaces APIを検索して座標を取得する
 // ============================================================
 async function coordsFromPlaceName(placeName) {
-  const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(placeName)}&key=${GOOGLE_MAPS_API_KEY}`);
+  const res = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(placeName)}&language=ja&key=${GOOGLE_MAPS_API_KEY}`);
   const data = await res.json();
   console.log("Geocoding APIレスポンス status:", data.status);
   if (data.status === "OK" && data.results.length > 0) {
