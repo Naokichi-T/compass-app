@@ -11,6 +11,8 @@
 
   // URL入力欄の状態
   let urlInput = $state("");
+  // 場所名検索の候補リスト
+  let searchResults = $state([]); // 検索候補の配列
   let urlError = $state("");
   let urlLoading = $state(false);
 
@@ -36,8 +38,8 @@
   }
 
   // ============================================================
-  // URLを貼り付けたときの処理
-  // 短縮URLはサーバー側で展開してから座標を取り出す
+  // 入力欄の処理
+  // http で始まる → URL処理、それ以外 → 場所名検索
   // ============================================================
   async function handleUrlInput() {
     urlError = "";
@@ -46,44 +48,69 @@
     if (!input) return;
 
     urlLoading = true;
+    searchResults = []; // 前回の候補をクリア
 
     try {
-      let targetUrl = input;
-
-      if (isShortUrl(input)) {
-        // 短縮URLの場合はサーバー側で展開して座標まで取得する
-        const res = await fetch(`/api/expand-url?url=${encodeURIComponent(input)}`);
+      if (input.startsWith("http")) {
+        // --- URL処理（既存のロジック）---
+        if (isShortUrl(input)) {
+          const res = await fetch(`/api/expand-url?url=${encodeURIComponent(input)}`);
+          const data = await res.json();
+          if (data.error) {
+            urlError = data.error;
+            urlLoading = false;
+            return;
+          }
+          destLat = data.lat;
+          destLng = data.lng;
+          destName = data.name ?? "目的地";
+          urlInput = "";
+        } else {
+          const coords = extractCoordsFromUrl(input);
+          if (!coords) {
+            urlError = "URLから座標を取り出せませんでした。GoogleマップのURLを貼り付けてください。";
+            urlLoading = false;
+            return;
+          }
+          const placeName = input.match(/\/place\/([^/]+)\//)?.[1];
+          destLat = coords.lat;
+          destLng = coords.lng;
+          destName = placeName ? decodeURIComponent(placeName).replace(/\+/g, " ") : "目的地";
+          urlInput = "";
+        }
+      } else {
+        // --- 場所名検索（新規）---
+        const res = await fetch(`/api/search-place?q=${encodeURIComponent(input)}`);
         const data = await res.json();
         if (data.error) {
           urlError = data.error;
           urlLoading = false;
           return;
         }
-        // サーバーから座標が直接返ってくる
-        destLat = data.lat;
-        destLng = data.lng;
-        destName = data.name ?? "目的地";
-        urlInput = "";
-      } else {
-        // 通常URLの場合はフロントエンドで座標を取り出す
-        const coords = extractCoordsFromUrl(input);
-        if (!coords) {
-          urlError = "URLから座標を取り出せませんでした。GoogleマップのURLを貼り付けてください。";
+        if (data.results.length === 0) {
+          urlError = "候補が見つかりませんでした";
           urlLoading = false;
           return;
         }
-        // 場所名も取り出す
-        const placeName = input.match(/\/place\/([^/]+)\//)?.[1];
-        destLat = coords.lat;
-        destLng = coords.lng;
-        destName = placeName ? decodeURIComponent(placeName).replace(/\+/g, " ") : "目的地";
-        urlInput = "";
+        // 候補リストを表示（ユーザーが選ぶまで待つ）
+        searchResults = data.results;
       }
     } catch (e) {
       urlError = "エラーが発生しました: " + e.message;
     }
 
     urlLoading = false;
+  }
+
+  // ============================================================
+  // 候補リストから場所を選んだときの処理
+  // ============================================================
+  function selectPlace(place) {
+    destLat = place.lat;
+    destLng = place.lng;
+    destName = place.name;
+    urlInput = "";
+    searchResults = []; // 候補リストを閉じる
   }
 
   // --- 状態変数 ---
@@ -231,6 +258,19 @@
           {urlLoading ? "取得中..." : "セット"}
         </button>
       </div>
+      <!-- 場所名検索の候補リスト -->
+      {#if searchResults.length > 0}
+        <ul class="search-results">
+          {#each searchResults as place}
+            <li>
+              <button class="search-result-item" onclick={() => selectPlace(place)}>
+                <span class="result-name">{place.name}</span>
+                <span class="result-address">{place.address}</span>
+              </button>
+            </li>
+          {/each}
+        </ul>
+      {/if}
       {#if urlError}
         <p class="url-error">{urlError}</p>
       {/if}
@@ -404,5 +444,48 @@
     font-size: 13px;
     color: #999;
     margin: 16px 0;
+  }
+
+  /* 場所名検索の候補リスト */
+  .search-results {
+    list-style: none;
+    margin: 0 0 8px;
+    padding: 0;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    overflow: hidden;
+    text-align: left;
+  }
+
+  .search-result-item {
+    width: 100%;
+    padding: 10px 12px;
+    cursor: pointer;
+    border: none;
+    border-bottom: 1px solid #f0f0f0;
+    background: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+  }
+
+  .search-result-item:last-child {
+    border-bottom: none;
+  }
+
+  .search-result-item:hover {
+    background: #f0f6ff;
+  }
+
+  .result-name {
+    font-size: 14px;
+    font-weight: bold;
+    color: #333;
+  }
+
+  .result-address {
+    font-size: 11px;
+    color: #999;
   }
 </style>
