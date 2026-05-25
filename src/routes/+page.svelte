@@ -115,6 +115,10 @@
 
   // --- 状態変数 ---
   let currentLat = $state(null); // 現在地の緯度
+  // GPS進行方向計算用：前回のGPS位置を保存
+  let prevLat = null;
+  let prevLng = null;
+  const MIN_MOVE_METERS = 5; // 何m以上動いたら進行方向を更新するか
   let currentLng = $state(null); // 現在地の経度
   let heading = $state(null); // スマホが向いている方角（度）
   // スムージング用：直近の角度を保存するバッファ
@@ -183,8 +187,26 @@
     // GPS監視を開始（位置が変わるたびに更新）
     navigator.geolocation.watchPosition(
       (pos) => {
-        currentLat = pos.coords.latitude;
-        currentLng = pos.coords.longitude;
+        const newLat = pos.coords.latitude;
+        const newLng = pos.coords.longitude;
+
+        // 前回位置があって、5m以上動いていたら進行方向を計算
+        if (prevLat !== null) {
+          const moved = calcDistance(prevLat, prevLng, newLat, newLng);
+          if (moved >= MIN_MOVE_METERS) {
+            // 進行方向をheadingとして使う
+            heading = calcBearing(prevLat, prevLng, newLat, newLng);
+            prevLat = newLat;
+            prevLng = newLng;
+          }
+        } else {
+          // 初回はそのまま保存
+          prevLat = newLat;
+          prevLng = newLng;
+        }
+
+        currentLat = newLat;
+        currentLng = newLng;
       },
       (err) => {
         errorMsg = "GPS取得エラー: " + err.message;
