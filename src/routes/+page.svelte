@@ -117,6 +117,10 @@
   let currentLat = $state(null); // 現在地の緯度
   let currentLng = $state(null); // 現在地の経度
   let heading = $state(null); // スマホが向いている方角（度）
+  // スムージング用：直近の角度を保存するバッファ
+  let headingBuffer = [];
+  const BUFFER_SIZE = 10; // 平均をとるサンプル数
+  const DEAD_ZONE = 3; // この角度以内の変化は無視する（度）
   let permission = $state("idle"); // センサーの許可状態: idle / granted / denied / unsupported
   let errorMsg = $state(""); // エラーメッセージ
 
@@ -216,19 +220,44 @@
 
   // ============================================================
   // 方位センサーのイベントを受け取る
-  // alphaは北を基準にした角度（ブラウザ・機種によって挙動が違う）
+  // スムージング（直近10回の平均）と不感帯（3°以内は無視）を適用
   // ============================================================
   function onOrientation(e) {
+    let raw = null;
+
     // webkitCompassHeadingはiPhone用（北=0°の絶対値）
     if (e.webkitCompassHeading !== undefined) {
-      heading = e.webkitCompassHeading;
+      raw = e.webkitCompassHeading;
     } else if (e.absolute && e.alpha !== null) {
       // Androidの絶対方位
-      heading = (360 - e.alpha) % 360;
+      raw = (360 - e.alpha) % 360;
     } else if (e.alpha !== null) {
       // absoluteでなくてもalphaが取れる場合は使う（暫定）
-      heading = (360 - e.alpha) % 360;
+      raw = (360 - e.alpha) % 360;
     }
+
+    if (raw === null) return;
+
+    // バッファに追加して古いものを捨てる
+    headingBuffer.push(raw);
+    if (headingBuffer.length > BUFFER_SIZE) {
+      headingBuffer.shift();
+    }
+
+    // 円環平均（0°と359°が隣同士になるよう考慮した平均）
+    const sinSum = headingBuffer.reduce((s, h) => s + Math.sin((h * Math.PI) / 180), 0);
+    const cosSum = headingBuffer.reduce((s, h) => s + Math.cos((h * Math.PI) / 180), 0);
+    const avg = ((Math.atan2(sinSum, cosSum) * 180) / Math.PI + 360) % 360;
+
+    // 不感帯：前回との差が DEAD_ZONE 以内なら更新しない
+    if (heading !== null) {
+      let diff = Math.abs(avg - heading);
+      // 359°→1°のような境界をまたぐ場合の補正
+      if (diff > 180) diff = 360 - diff;
+      if (diff < DEAD_ZONE) return;
+    }
+
+    heading = avg;
   }
 </script>
 
@@ -279,7 +308,7 @@
         <p class="dest-name">目的地：{destName}</p>
         <p class="distance">{formatDistance(distance)}</p>
       {:else}
-        <p class="dest-none">↑ URLを貼り付けて目的地をセットしてください</p>
+        <p class="dest-none">📍 場所名またはGoogleマップのURLを入力</p>
       {/if}
 
       <!-- 矢印（目的地がセットされているときだけ表示） -->
